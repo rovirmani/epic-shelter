@@ -1,134 +1,43 @@
-import { useNavigate } from 'react-router-dom'
-import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  LinearProgress,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Typography,
-} from '@mui/material'
-import { Add as AddIcon } from '@mui/icons-material'
-import { useQuery } from '@tanstack/react-query'
-import axios from 'axios'
-
-interface Migration {
-  id: string
-  name: string
-  status: 'running' | 'completed' | 'failed'
-  progress: number
-  source: string
-  destination: string
-  startTime: string
-  endTime?: string
-}
+import React from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { MigrationList } from '../components/MigrationList';
+import { Button } from '@/components/ui/button';
+import { useNavigate } from 'react-router-dom';
+import { PlusIcon } from '@radix-ui/react-icons';
+import { getMigrations } from '@/api/migrations';
 
 export default function Migrations() {
-  const navigate = useNavigate()
-
+  const navigate = useNavigate();
+  
   const { data: migrations = [], isLoading } = useQuery({
     queryKey: ['migrations'],
-    queryFn: async () => {
-      const { data } = await axios.get<Migration[]>('/api/migrations')
-      return data
-    },
-  })
+    queryFn: getMigrations,
+    refetchInterval: 5000,
+  });
 
-  const getStatusColor = (status: Migration['status']) => {
-    switch (status) {
-      case 'running':
-        return 'primary'
-      case 'completed':
-        return 'success'
-      case 'failed':
-        return 'error'
-      default:
-        return 'default'
-    }
+  if (isLoading) {
+    return (
+      <div className="flex h-[50vh] items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      </div>
+    );
   }
 
   return (
-    <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-        <Typography variant="h4">Data Migrations</Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => navigate('/migrations/new')}
-        >
-          New Migration
+    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+      <div className="flex items-center justify-between space-y-2">
+        <h2 className="text-3xl font-bold tracking-tight">Migrations</h2>
+        <Button onClick={() => navigate('/migrations/new')}>
+          <PlusIcon className="mr-2 h-4 w-4" /> New Migration
         </Button>
-      </Box>
-
-      <Card>
-        <CardContent>
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Name</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Progress</TableCell>
-                  <TableCell>Source</TableCell>
-                  <TableCell>Destination</TableCell>
-                  <TableCell>Start Time</TableCell>
-                  <TableCell>End Time</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={7}>
-                      <LinearProgress />
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  migrations.map((migration) => (
-                    <TableRow key={migration.id}>
-                      <TableCell>{migration.name}</TableCell>
-                      <TableCell>
-                        <Chip
-                          label={migration.status}
-                          color={getStatusColor(migration.status)}
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                          <LinearProgress
-                            variant="determinate"
-                            value={migration.progress}
-                            sx={{ flexGrow: 1, mr: 2 }}
-                          />
-                          <Typography variant="body2">
-                            {migration.progress}%
-                          </Typography>
-                        </Box>
-                      </TableCell>
-                      <TableCell>{migration.source}</TableCell>
-                      <TableCell>{migration.destination}</TableCell>
-                      <TableCell>
-                        {new Date(migration.startTime).toLocaleString()}
-                      </TableCell>
-                      <TableCell>
-                        {migration.endTime
-                          ? new Date(migration.endTime).toLocaleString()
-                          : '-'}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </CardContent>
-      </Card>
-    </Box>
-  )
+      </div>
+      
+      <MigrationList 
+        migrations={migrations}
+        onStart={(id) => console.log('Start migration', id)}
+        onStop={(id) => console.log('Stop migration', id)}
+        onRetry={(id) => console.log('Retry migration', id)}
+      />
+    </div>
+  );
 }

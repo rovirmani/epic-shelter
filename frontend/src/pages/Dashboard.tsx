@@ -1,100 +1,76 @@
-import {
-  Box,
-  Card,
-  CardContent,
-  Grid,
-  Typography,
-  LinearProgress,
-} from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
-import axios from 'axios'
-
-interface DashboardStats {
-  activeMigrations: number
-  completedMigrations: number
-  failedMigrations: number
-  totalDataMigrated: string
-  currentThroughput: string
-  activeConnections: number
-}
+import { OverviewCards } from '@/components/dashboard/OverviewCards'
+import { MigrationChart } from '@/components/dashboard/MigrationChart'
+import { RecentMigrations } from '@/components/dashboard/RecentMigrations'
+import { getMigrations, getMigrationMetrics } from '@/api/migrations'
 
 export default function Dashboard() {
-  const { data: stats, isLoading } = useQuery({
-    queryKey: ['dashboard-stats'],
-    queryFn: async () => {
-      const { data } = await axios.get<DashboardStats>('/api/stats')
-      return data
-    },
+  const { data: metrics, isLoading: isLoadingMetrics } = useQuery({
+    queryKey: ['migration-metrics'],
+    queryFn: getMigrationMetrics,
+    refetchInterval: 5000,
   })
 
-  if (isLoading) {
-    return <LinearProgress />
-  }
+  const { data: migrations = [], isLoading: isLoadingMigrations } = useQuery({
+    queryKey: ['migrations'],
+    queryFn: getMigrations,
+    refetchInterval: 5000,
+  })
 
-  const statCards = [
+  // Sample data for the chart - in production, this would come from an API
+  const chartData = [
     {
-      title: 'Active Migrations',
-      value: stats?.activeMigrations || 0,
-      color: '#1976d2',
+      date: "Jan 22",
+      "Successful Migrations": 12,
+      "Failed Migrations": 2,
     },
     {
-      title: 'Completed Migrations',
-      value: stats?.completedMigrations || 0,
-      color: '#2e7d32',
+      date: "Feb 22",
+      "Successful Migrations": 18,
+      "Failed Migrations": 3,
     },
     {
-      title: 'Failed Migrations',
-      value: stats?.failedMigrations || 0,
-      color: '#d32f2f',
+      date: "Mar 22",
+      "Successful Migrations": 25,
+      "Failed Migrations": 1,
     },
     {
-      title: 'Total Data Migrated',
-      value: stats?.totalDataMigrated || '0 GB',
-      color: '#ed6c02',
+      date: "Apr 22",
+      "Successful Migrations": 32,
+      "Failed Migrations": 4,
     },
     {
-      title: 'Current Throughput',
-      value: stats?.currentThroughput || '0 MB/s',
-      color: '#9c27b0',
-    },
-    {
-      title: 'Active Connections',
-      value: stats?.activeConnections || 0,
-      color: '#0288d1',
+      date: "May 22",
+      "Successful Migrations": 38,
+      "Failed Migrations": 2,
     },
   ]
 
+  if (isLoadingMetrics || isLoadingMigrations) {
+    return (
+      <div className="flex h-[50vh] items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      </div>
+    )
+  }
+
+  if (!metrics) {
+    return <div>Error loading metrics</div>
+  }
+
   return (
-    <Box>
-      <Typography variant="h4" gutterBottom>
-        Dashboard
-      </Typography>
-      <Grid container spacing={3}>
-        {statCards.map((stat) => (
-          <Grid item xs={12} sm={6} md={4} key={stat.title}>
-            <Card
-              sx={{
-                height: '100%',
-                borderTop: 3,
-                borderColor: stat.color,
-              }}
-            >
-              <CardContent>
-                <Typography
-                  color="textSecondary"
-                  gutterBottom
-                  variant="overline"
-                >
-                  {stat.title}
-                </Typography>
-                <Typography variant="h4" component="div">
-                  {stat.value}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
-    </Box>
+    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+      <div className="flex items-center justify-between space-y-2">
+        <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+      </div>
+      <div className="space-y-4">
+        <OverviewCards metrics={metrics} />
+        
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+          <MigrationChart data={chartData} />
+          <RecentMigrations migrations={migrations} />
+        </div>
+      </div>
+    </div>
   )
 }
