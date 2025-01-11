@@ -1,90 +1,110 @@
-# Epic Shelter - Data Migration Dashboard
+# Epic Shelter
 
-A modern data migration tool built with FastAPI and React, designed to facilitate seamless data transfers between different data lakes and databases.
+Epic Shelter is a powerful data migration tool that enables seamless data transfers between different storage systems. The current implementation supports migrating data from SingleStore to Hydrolix, with plans to support more data sources and destinations.
 
-## Project Structure
+## Features
+
+- **Source Systems**
+  - SingleStore database
+  - More coming soon...
+
+- **Destination Systems**
+  - Hydrolix data platform
+  - More coming soon...
+
+- **Data Processing**
+  - Efficient Parquet conversion
+  - Configurable chunking and compression
+  - Schema translation
+  - Support for partitioning
+
+## Quick Start
+
+### Prerequisites
+
+- Python 3.8+
+- Node.js 16+
+- SingleStore database
+- Hydrolix account
+
+### Installation
+
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/epic-shelter.git
+cd epic-shelter
 ```
-epic-shelter/
-├── backend/           # FastAPI backend
-│   ├── app/
-│   │   ├── api/      # API endpoints
-│   │   ├── core/     # Core configuration
-│   │   ├── schemas/  # Pydantic models
-│   │   └── services/ # Business logic
-│   ├── requirements.txt
-│   └── run.py
-└── frontend/         # React frontend
-    ├── src/
-    ├── package.json
-    └── ...
-```
 
-## Setup Instructions
-
-### Backend Setup
-
-1. Create and activate a virtual environment:
+2. Set up the backend:
 ```bash
 cd backend
 python -m venv venv
 source venv/bin/activate  # On Windows: .\venv\Scripts\activate
-```
-
-2. Install dependencies:
-```bash
 pip install -r requirements.txt
 ```
 
-3. Create a `.env` file in the `backend` directory with the following content:
-```env
-SINGLESTORE_HOST=your_host
-SINGLESTORE_PORT=your_port
-SINGLESTORE_USERNAME=your_username
-SINGLESTORE_PASSWORD=your_password
-SINGLESTORE_DATABASE=your_database
-```
-
-4. Run the backend server:
-```bash
-python run.py
-```
-
-The backend will be available at `http://localhost:8000` with:
-- API documentation: `http://localhost:8000/docs`
-- OpenAPI specification: `http://localhost:8000/api/v1/openapi.json`
-
-### Frontend Setup
-
-1. Install dependencies:
+3. Set up the frontend:
 ```bash
 cd frontend
 npm install
 ```
 
-2. Start the development server:
+4. Configure environment variables:
 ```bash
+# Backend (.env)
+SINGLESTORE_HOST=your_host
+SINGLESTORE_PORT=your_port
+SINGLESTORE_USERNAME=your_username
+SINGLESTORE_PASSWORD=your_password
+SINGLESTORE_DATABASE=your_database
+
+HYDROLIX_API_URL=your_api_url
+HYDROLIX_TOKEN=your_token
+HYDROLIX_ORG_ID=your_org_id
+HYDROLIX_PROJECT_ID=your_project_id
+```
+
+### Running the Application
+
+1. Start the backend:
+```bash
+cd backend
+uvicorn app.main:app --reload
+```
+
+2. Start the frontend:
+```bash
+cd frontend
 npm run dev
 ```
 
-The frontend will be available at `http://localhost:5173`
+3. Access the application at `http://localhost:5173`
 
-## API Endpoints
+## Usage
 
-### Health Check
-- GET `/api/v1/health`: Check API health status
+1. **Create a Migration**
+   - Select source (SingleStore) and destination (Hydrolix)
+   - Configure connection details
+   - Specify query and table settings
+   - Start migration
 
-### Migrations
-- GET `/api/v1/migrations`: List all migrations
-- POST `/api/v1/migrations`: Create a new migration
-- GET `/api/v1/migrations/{migration_id}`: Get migration details
-- GET `/api/v1/migrations/{migration_id}/status`: Get migration status
+2. **Monitor Progress**
+   - Track migration status
+   - View detailed progress steps
+   - Handle any errors
 
-## Development
+3. **Verify Data**
+   - Check destination table
+   - Validate data integrity
+   - Review migration logs
 
-- Backend uses FastAPI with Python 3.8+
-- Frontend uses React 18+ with Vite and shadcn/ui
-- Database: SingleStore
-- API documentation is auto-generated using FastAPI's built-in Swagger UI
+## API Documentation
+
+The API documentation is available at `http://localhost:8000/docs` when running the backend server.
+
+## Architecture
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed information about the system design.
 
 ## Contributing
 
@@ -93,3 +113,7 @@ The frontend will be available at `http://localhost:5173`
 3. Commit your changes (`git commit -m 'Add some amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

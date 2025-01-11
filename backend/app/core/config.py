@@ -14,18 +14,15 @@ class Settings(BaseSettings):
         "http://localhost:3000"   # Alternative frontend port
     ]
     
+    # Database Configuration
+    SQLALCHEMY_DATABASE_URI: str = "sqlite:///./app.db"
+    
     # SingleStore Configuration
     SINGLESTORE_HOST: str
     SINGLESTORE_PORT: str
     SINGLESTORE_USERNAME: str
     SINGLESTORE_PASSWORD: str
     SINGLESTORE_DATABASE: str
-    
-    # Hydrolix Configuration
-    HYDROLIX_API_URL: str
-    HYDROLIX_API_KEY: str
-    HYDROLIX_ORG_ID: str
-    HYDROLIX_PROJECT_ID: str
     
     @property
     def SINGLESTORE_URL(self) -> str:
