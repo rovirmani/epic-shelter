@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas.migration import Migration, MigrationCreate, MigrationStatus
 from app.models.migration import MigrationModel
 from app.connectors.singlestore import SingleStoreConnector
-from app.connectors.hydrolix import HydrolixConnector
+from app.connectors.default import DefaultConnector
 from app.services.parquet_service import ParquetService, ParquetConfig
 from app.services.schema_service import SchemaService
 from app.core.monitoring import metrics, log_step, monitor_migration_progress
@@ -108,59 +108,36 @@ class MigrationService:
             await self._update_status(model, "Reading source schema", 0.2)
             source_schema = await source.get_schema()
             
-            # Connect to destination
+            # Initialize destination connector
             await self._update_status(model, "Connecting to destination", 0.3)
-            destination = HydrolixConnector(config.destination_config)
+            destination = DefaultConnector(config.destination_config)
             await destination.connect()
-            
+
             # Create table in destination
             await self._update_status(model, "Creating destination table", 0.4)
-            hydrolix_schema = self.schema_service.translate_to_hydrolix_schema(
-                source_schema=source_schema,
-                primary_key=config.primary_key,
-                partition_cols=config.partition_cols
-            )
-            
             await destination.create_table(
                 config.destination_table,
-                hydrolix_schema
+                source_schema
             )
-            
-            # Read data from source
-            await self._update_status(model, "Reading source data", 0.5)
-            data = await source.read_data(config.source_query)
-            
-            # Convert to Parquet
-            await self._update_status(model, "Converting to Parquet", 0.7)
-            with tempfile.TemporaryDirectory() as temp_dir:
-                parquet_path = os.path.join(temp_dir, f"{migration_id}.parquet")
-                
-                parquet_config = ParquetConfig(
-                    partition_cols=config.partition_cols,
-                    chunk_size=config.chunk_size or 100000
-                )
-                
-                await self.parquet_service.convert_to_parquet(
-                    data=data,
-                    schema=source_schema,
-                    output_path=parquet_path,
-                    config=parquet_config
-                )
-                
-                # Upload to Hydrolix
+
+            # Process data in chunks
+            total_rows = 0
+            async for chunk in source.read_data(config.source_query):
+                # Upload to destination
                 await self._update_status(model, "Uploading to destination", 0.9)
                 rows_written = await destination.write_data(
-                    parquet_path,
+                    chunk,
                     config.destination_table
                 )
-            
+                total_rows += rows_written
+
             # Success
             duration = (datetime.utcnow() - start_time).total_seconds()
-            metrics.record_migration_success(migration_id, rows_written, duration)
+            metrics.record_migration_success(migration_id, total_rows, duration)
             
             await self._update_status(
                 model,
-                f"Completed - {rows_written} rows migrated",
+                f"Completed - {total_rows} rows migrated",
                 1.0,
                 "completed",
                 completed_at=datetime.utcnow()

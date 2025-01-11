@@ -5,13 +5,16 @@ from enum import Enum
 
 class MigrationType(str, Enum):
     SINGLESTORE = "singlestore"
-    HYDROLIX = "hydrolix"
     #TODO ADD Future connectors
     AWS_S3 = "aws_s3"
     AZURE_BLOB = "azure_blob"
     GCS = "gcs"
     SNOWFLAKE = "snowflake"
     DATABRICKS = "databricks"
+
+class DestinationType(str, Enum):
+    """Supported destination types"""
+    DEFAULT = "default"
 
 class MigrationStatus(BaseModel):
     status: str
@@ -25,7 +28,7 @@ class MigrationCreate(BaseModel):
     name: str
     source_type: MigrationType
     source_config: Dict[str, Any]
-    destination_type: MigrationType
+    destination_type: DestinationType
     destination_config: Dict[str, Any]
     source_query: str
     destination_table: str
@@ -37,7 +40,7 @@ class Migration(BaseModel):
     id: str
     name: str
     source_type: MigrationType
-    destination_type: MigrationType
+    destination_type: DestinationType
     status: str
     progress: float
     current_step: str = "Initializing"
