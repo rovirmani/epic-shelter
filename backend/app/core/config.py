@@ -21,12 +21,6 @@ class Settings(BaseSettings):
     SINGLESTORE_PASSWORD: str
     SINGLESTORE_DATABASE: str
     
-    # Hydrolix Configuration
-    HYDROLIX_API_URL: str
-    HYDROLIX_API_KEY: str
-    HYDROLIX_ORG_ID: str
-    HYDROLIX_PROJECT_ID: str
-    
     @property
     def SINGLESTORE_URL(self) -> str:
         return f"mysql+pymysql://{self.SINGLESTORE_USERNAME}:{self.SINGLESTORE_PASSWORD}@{self.SINGLESTORE_HOST}:{self.SINGLESTORE_PORT}/{self.SINGLESTORE_DATABASE}"
