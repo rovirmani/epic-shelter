@@ -49,3 +49,5 @@ frontend/
 logs/
 *.log
 .vercel/*
+
+exports/
