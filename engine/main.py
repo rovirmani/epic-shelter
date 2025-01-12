@@ -1,5 +1,7 @@
 import os
 import threading
+import uuid
+from services.s3 import S3Service
 from connectors.singlestore import SingleStoreConnector
 from services.parquet import ParquetService
 import asyncio
@@ -13,6 +15,12 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
+credentials = {
+    'aws_access_key_id': os.getenv("AWS_ACCESS_KEY_ID"),
+    'aws_secret_access_key': os.getenv("AWS_SECRET_ACCESS_KEY")
+}
+s3 = S3Service('gaucho-racing', credentials=credentials)
+
 singlestore = SingleStoreConnector(
     {
         "host": os.getenv("SINGLESTORE_HOST"),
@@ -23,10 +31,12 @@ singlestore = SingleStoreConnector(
     }
 )
 
-batch_size = 500000
+batch_size = 5000000
+
+job_id = str(uuid.uuid4())
 
 # Move process_batch outside startup_event and make it a regular function
-async def process_batch(offset: int) -> int:
+async def process_batch(job_id: str, offset: int) -> int:
     # Create a new connector instance for each batch
     batch_singlestore = SingleStoreConnector(
         {
@@ -43,20 +53,22 @@ async def process_batch(offset: int) -> int:
     print(f"Processing batch {batch_num} starting at offset {offset:,}")
     
     data = await batch_singlestore.read_table(
-        "eventsdata", 
+        "eventsdata",
         interval=batch_size,
         offset=offset,
     )
     
     parquet_service = ParquetService()
-    output_path = f"exports/eventsdata_batch_{batch_num}.parquet"
+    output_path = f"exports/eventsdata_{batch_num}.parquet"
     await parquet_service.dataframe_to_parquet(data, output_path)
+    s3.upload_parquet(output_path, f"epic-shelter/{job_id}/eventsdata_{batch_num}.parquet")
+    # await batch_singlestore.write_table("eventsdata_copy", data)
     await batch_singlestore.disconnect()
     print(f"Batch {batch_num} saved to {output_path}")
     return len(data)
 
-def process_batch_sync(offset: int) -> int:
-    return asyncio.run(process_batch(offset))
+def process_batch_sync(job_id: str, offset: int) -> int:
+    return asyncio.run(process_batch(job_id, offset))
 
 async def main():
     # Clear out exports directory before starting
@@ -73,7 +85,6 @@ async def main():
 
     
     start_time = time.time()
-    total_rows_processed = 0
     
     print(f"Starting export at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     await singlestore.connect()
@@ -90,27 +101,28 @@ async def main():
     schema = await singlestore.get_table_schema(table_name)
     print(f"Schema for {table_name}: {schema}")
     
+    # row_count = 2000000
     row_count = await singlestore.get_row_count(table_name)
     print(f"Row count for {table_name}: {row_count:,}")
 
     # Use a process pool to manage concurrent batch processing
     with ProcessPoolExecutor(max_workers=multiprocessing.cpu_count()) as executor:
         futures = [
-            executor.submit(process_batch_sync, offset)
+            executor.submit(process_batch_sync, job_id, offset)
             for offset in range(0, row_count, batch_size)
         ]
         results = [future.result() for future in futures]
-        total_rows_processed = sum(results)
 
     end_time = time.time()
     elapsed_time = end_time - start_time
     rows_per_second = row_count / elapsed_time
+
+    await singlestore.ingest_parquet("eventsdata_copy", f"gaucho-racing/epic-shelter/{job_id}/*.parquet")
     
     print("\n=== Export Summary ===")
     print(f"Total time: {elapsed_time:.2f} seconds")
     print(f"Total rows processed: {row_count:,}")
     print(f"Average processing speed: {rows_per_second:.2f} rows/second")
-    # print(f"Number of batches: {len(futures)}")
     print(f"Finished at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=====================")
     await singlestore.disconnect()

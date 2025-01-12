@@ -142,47 +142,119 @@ class SingleStoreConnector:
             print(f"Error reading table {table_name}: {str(e)}")
             return pd.DataFrame()  # Return empty DataFrame on error
         
-    def map_to_parquet_type(self, singlestore_type: str) -> str:
-        """Convert SingleStore data type to Parquet data type"""
-        # Convert to lowercase for consistent matching
-        singlestore_type = singlestore_type.lower()
+    async def write_table(self, table_name: str, df: pd.DataFrame) -> None:
+        """
+        Write a pandas DataFrame to a table in SingleStore
         
-        # Extract base type if there are parameters (e.g., varchar(255) -> varchar)
-        base_type = singlestore_type.split('(')[0]
+        Args:
+            table_name: Name of the target table
+            df: pandas DataFrame containing the data to write
+            
+        Raises:
+            Exception: If there's an error during the write operation
+        """
+        if df.empty:
+            print(f"Warning: Empty DataFrame provided for table {table_name}")
+            return
+
+        try:
+            start_time = time.time()
+            
+            # Get column names and create placeholders for SQL query
+            columns = df.columns.tolist()
+            placeholders = ', '.join(['%s'] * len(columns))
+            column_names = ', '.join(columns)
+            
+            # Prepare the insert query
+            query = f"INSERT INTO {table_name} ({column_names}) VALUES ({placeholders})"
+            
+            # Convert DataFrame to list of tuples for batch insertion
+            rows = df.to_records(index=False).tolist()
+            
+            async with self.pool.acquire() as conn:
+                async with conn.cursor() as cur:
+                    # Use executemany for batch insertion
+                    await cur.executemany(query, rows)
+                    
+                    total_time = time.time() - start_time
+                    print(f"Inserted {len(df)} rows into {table_name} in {total_time:.2f} seconds")
+                    
+        except Exception as e:
+            print(f"Error writing to table {table_name}: {str(e)}")
+            raise
+
+    async def ingest_parquet(self, table_name: str, parquet_path: str) -> None:
+        """
+        Ingest a parquet file into a table in SingleStore using a pipeline
         
-        # Mapping of SingleStore types to Parquet types
-        type_mapping = {
-            # Numeric types
-            'tinyint': 'INT8',
-            'smallint': 'INT16', 
-            'mediumint': 'INT32',
-            'int': 'INT32',
-            'bigint': 'INT64',
-            'float': 'FLOAT',
-            'double': 'DOUBLE',
-            'decimal': 'DECIMAL',
+        Args:
+            table_name: Name of the target table
+            parquet_path: S3 path in format 'bucket/prefix/path/*.parquet'
             
-            # String types
-            'char': 'STRING',
-            'varchar': 'STRING',
-            'text': 'STRING',
-            'mediumtext': 'STRING',
-            'longtext': 'STRING',
+        Raises:
+            Exception: If there's an error creating or testing the pipeline
+        """
+        try:
+            pipeline_name = f"{table_name}_pipeline"
             
-            # Binary types
-            'binary': 'BINARY',
-            'varbinary': 'BINARY',
-            'blob': 'BINARY',
+            # Get the table schema to map columns
+            schema = await self.get_table_schema(table_name)
+            if not schema:
+                raise Exception(f"Could not get schema for table {table_name}")
             
-            # Date/Time types
-            'date': 'DATE',
-            'datetime': 'TIMESTAMP',
-            'timestamp': 'TIMESTAMP',
-            'time': 'TIME',
+            # Create column mappings for the pipeline
+            column_mappings = []
+            for column_name, column_type in schema.items():
+                if 'timestamp' in column_type.lower():
+                    # Handle timestamp columns specially
+                    column_mappings.append(f"@{column_name} <- {column_name}")
+                else:
+                    column_mappings.append(f"{column_name} <- {column_name}")
             
-            # Boolean type
-            'bool': 'BOOLEAN',
-            'boolean': 'BOOLEAN'
-        }
-        
-        return type_mapping.get(base_type, 'STRING')  # Default to STRING if type unknown
+            # Join column mappings with commas
+            column_mapping_str = ",\n    ".join(column_mappings)
+            
+            # Create the pipeline query
+            pipeline_query = f"""
+            CREATE OR REPLACE PIPELINE {pipeline_name}
+            AS LOAD DATA S3 '{parquet_path}'
+            CONFIG '{{"region": "us-west-2"}}'
+            CREDENTIALS '{{"aws_access_key_id": "AKIATCKAPSJCJ55YUGMT", "aws_secret_access_key": "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"}}'
+            INTO TABLE {table_name}
+            FORMAT PARQUET
+            (
+                {column_mapping_str}
+            )
+            """
+            
+            # Add timestamp conversions if needed
+            timestamp_sets = []
+            for column_name, column_type in schema.items():
+                if 'timestamp' in column_type.lower():
+                    timestamp_sets.append(
+                        f"{column_name} = FROM_UNIXTIME(@{column_name}/1000000)"
+                    )
+            
+            if timestamp_sets:
+                pipeline_query += f"\nSET {', '.join(timestamp_sets)};"
+            else:
+                pipeline_query += ";"
+
+            print(f"Generated pipeline definition for {pipeline_name}")
+            print(pipeline_query)
+            
+            start_time = time.time()
+            async with self.pool.acquire() as conn:
+                async with conn.cursor() as cur:
+                    # Create the pipeline
+                    await cur.execute(pipeline_query)
+                    
+                    # Test the pipeline
+                    await cur.execute(f"START PIPELINE {pipeline_name} FOREGROUND")
+                    
+                    elapsed_time = time.time() - start_time
+                    print(f"Successfully ingested in {elapsed_time:.2f} seconds")
+                    
+        except Exception as e:
+            print(f"Error creating pipeline for table {table_name}: {str(e)}")
+            raise
