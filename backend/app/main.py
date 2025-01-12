@@ -1,3 +1,7 @@
+import os
+from app.connectors.singlestore import SingleStoreConnector
+# from app.services.parquet import ParquetService
+# from app.services.parquet_gpu import GPUParquetService
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
