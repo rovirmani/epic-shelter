@@ -5,11 +5,11 @@ import time
 
 class SingleStoreConnector:
     def __init__(self, config: Dict[str, Any]):
-        self.host = config.get('host', settings.SINGLESTORE_HOST)
-        self.port = int(config.get('port', settings.SINGLESTORE_PORT))
-        self.user = config.get('username', settings.SINGLESTORE_USERNAME)
-        self.password = config.get('password', settings.SINGLESTORE_PASSWORD)
-        self.database = config.get('database', settings.SINGLESTORE_DATABASE)
+        self.host = config.get('host')
+        self.port = int(config.get('port'))
+        self.user = config.get('username')
+        self.password = config.get('password')
+        self.database = config.get('database')
         self.pool = None
 
     async def connect(self) -> None:
@@ -94,7 +94,7 @@ class SingleStoreConnector:
             print(f"Error getting primary key columns for table {table_name}: {str(e)}")
             return []
 
-    def read_table(self, table_name: str, interval: int, offset: int = 0, sort_column: str = 'id') -> pd.DataFrame:
+    async def read_table(self, table_name: str, interval: int, offset: int = 0) -> pd.DataFrame:
         """
         Read a portion of a table and return as a pandas DataFrame
         
@@ -110,18 +110,10 @@ class SingleStoreConnector:
         try:
             start_time = time.time()
             
-            # Get primary key columns for sorting
-            pk_columns = self.get_primary_key_columns(table_name)
-            if not pk_columns:
-                pk_columns = [sort_column]  # Fallback to sort_column if no primary key found
-                
-            # Build ORDER BY clause
-            order_by = ", ".join(pk_columns)
-            
-            with self.pool.acquire() as conn:
-                with conn.cursor() as cur:
+            async with self.pool.acquire() as conn:
+                async with conn.cursor() as cur:
                     # Get column names
-                    cur.execute(f"SELECT * FROM {table_name} LIMIT 0")
+                    await cur.execute(f"SELECT * FROM {table_name} LIMIT 0")
                     columns = [desc[0] for desc in cur.description]
                     
                     # Read data with consistent ordering
@@ -132,8 +124,8 @@ class SingleStoreConnector:
                         OFFSET {offset}
                     """
                     query_start = time.time()
-                    cur.execute(query)
-                    rows = cur.fetchall()
+                    await cur.execute(query)
+                    rows = await cur.fetchall()
                     query_time = time.time() - query_start
                     print(f"Query execution time: {query_time:.2f} seconds")
                     

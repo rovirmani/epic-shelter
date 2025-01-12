@@ -1,47 +1,64 @@
 import os
-from app.connectors.singlestore import SingleStoreConnector
-from app.services.parquet import ParquetService
+import threading
+from connectors.singlestore import SingleStoreConnector
+from services.parquet import ParquetService
 import asyncio
 from typing import List
 import time
 from datetime import datetime
 from concurrent.futures import ProcessPoolExecutor
 import multiprocessing
+from dotenv import load_dotenv
 
+# Load environment variables from .env file
+load_dotenv()
 
 singlestore = SingleStoreConnector(
     {
-        "host": settings.SINGLESTORE_HOST,
-        "port": settings.SINGLESTORE_PORT,
-        "username": settings.SINGLESTORE_USERNAME,
-        "password": settings.SINGLESTORE_PASSWORD,
-        "database": settings.SINGLESTORE_DATABASE
+        "host": os.getenv("SINGLESTORE_HOST"),
+        "port": os.getenv("SINGLESTORE_PORT"),
+        "username": os.getenv("SINGLESTORE_USERNAME"), 
+        "password": os.getenv("SINGLESTORE_PASSWORD"),
+        "database": os.getenv("SINGLESTORE_DATABASE")
     }
 )
 
+batch_size = 500000
+
 # Move process_batch outside startup_event and make it a regular function
-def process_batch(offset: int) -> int:
-    batch_size = 100000
+async def process_batch(offset: int) -> int:
+    # Create a new connector instance for each batch
+    batch_singlestore = SingleStoreConnector(
+        {
+            "host": os.getenv("SINGLESTORE_HOST"),
+            "port": os.getenv("SINGLESTORE_PORT"),
+            "username": os.getenv("SINGLESTORE_USERNAME"), 
+            "password": os.getenv("SINGLESTORE_PASSWORD"),
+            "database": os.getenv("SINGLESTORE_DATABASE")
+        }
+    )
+    await batch_singlestore.connect()
+    
     batch_num = offset // batch_size
     print(f"Processing batch {batch_num} starting at offset {offset:,}")
     
-    # Since we can't use async functions directly in processes,
-    # we'll need to run synchronous operations
-    data = singlestore.read_table(  # You'll need to create this method
+    data = await batch_singlestore.read_table(
         "eventsdata", 
         interval=batch_size,
         offset=offset,
-        sort_column="user_id"
     )
     
     parquet_service = ParquetService()
     output_path = f"exports/eventsdata_batch_{batch_num}.parquet"
-    parquet_service.dataframe_to_parquet(data, output_path)
+    await parquet_service.dataframe_to_parquet(data, output_path)
+    await batch_singlestore.disconnect()
     print(f"Batch {batch_num} saved to {output_path}")
     return len(data)
 
-@app.on_event("startup")
-async def startup_event():
+def process_batch_sync(offset: int) -> int:
+    return asyncio.run(process_batch(offset))
+
+async def main():
     # Clear out exports directory before starting
     if os.path.exists("exports"):
         for file in os.listdir("exports"):
@@ -76,31 +93,27 @@ async def startup_event():
     row_count = await singlestore.get_row_count(table_name)
     print(f"Row count for {table_name}: {row_count:,}")
 
-    batch_size = 100000
-    parquet_service = ParquetService()
-    
-    # Determine number of processes based on CPU cores
-    num_processes = multiprocessing.cpu_count()
-    
-    # Create process pool
-    with ProcessPoolExecutor(max_workers=num_processes) as executor:
+    # Use a process pool to manage concurrent batch processing
+    with ProcessPoolExecutor(max_workers=multiprocessing.cpu_count()) as executor:
         futures = [
-            executor.submit(process_batch, offset)
+            executor.submit(process_batch_sync, offset)
             for offset in range(0, row_count, batch_size)
         ]
-        
-        # Wait for all futures to complete
         results = [future.result() for future in futures]
         total_rows_processed = sum(results)
 
     end_time = time.time()
     elapsed_time = end_time - start_time
-    rows_per_second = total_rows_processed / elapsed_time
+    rows_per_second = row_count / elapsed_time
     
     print("\n=== Export Summary ===")
     print(f"Total time: {elapsed_time:.2f} seconds")
-    print(f"Total rows processed: {total_rows_processed:,}")
+    print(f"Total rows processed: {row_count:,}")
     print(f"Average processing speed: {rows_per_second:.2f} rows/second")
-    print(f"Number of batches: {len(futures)}")
+    # print(f"Number of batches: {len(futures)}")
     print(f"Finished at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=====================")
+    await singlestore.disconnect()
+
+if __name__ == "__main__":
+    asyncio.run(main())
