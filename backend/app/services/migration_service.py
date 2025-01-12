@@ -12,7 +12,7 @@ from app.schemas.migration import Migration, MigrationCreate, MigrationStatus
 from app.models.migration import MigrationModel
 from app.connectors.singlestore import SingleStoreConnector
 from app.connectors.default import DefaultConnector
-from app.services.parquet_service import ParquetService, ParquetConfig
+from app.services.parquet import ParquetService
 from app.services.schema_service import SchemaService
 from app.core.monitoring import metrics, log_step, monitor_migration_progress
 

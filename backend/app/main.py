@@ -42,25 +42,25 @@ singlestore = SingleStoreConnector(
     }
 )
 
-# Move process_batch outside startup_event and make it a regular function
-def process_batch(offset: int) -> int:
-    batch_size = 100000
-    batch_num = offset // batch_size
-    print(f"Processing batch {batch_num} starting at offset {offset:,}")
+# Move process_chunk outside startup_event and make it a regular function
+def process_chunk(offset: int) -> int:
+    chunk_size = 100000
+    chunk_num = offset // chunk_size
+    print(f"Processing chunk {chunk_num} starting at offset {offset:,}")
     
     # Since we can't use async functions directly in processes,
     # we'll need to run synchronous operations
     data = singlestore.read_table(  # You'll need to create this method
         "eventsdata", 
-        interval=batch_size,
+        interval=chunk_size,
         offset=offset,
         sort_column="user_id"
     )
     
     parquet_service = ParquetService()
-    output_path = f"exports/eventsdata_batch_{batch_num}.parquet"
-    parquet_service.dataframe_to_parquet(data, output_path)
-    print(f"Batch {batch_num} saved to {output_path}")
+    output_path = f"exports/eventsdata_chunk_{chunk_num}.parquet"
+    parquet_service.dataframe_to_parquet(data, output_path, mode="dbscan")
+    print(f"chunk {chunk_num} saved to {output_path}")
     return len(data)
 
 @app.on_event("startup")
@@ -99,7 +99,7 @@ async def startup_event():
     row_count = await singlestore.get_row_count(table_name)
     print(f"Row count for {table_name}: {row_count:,}")
 
-    batch_size = 100000
+    chunk_size = 100000
     parquet_service = ParquetService()
     
     # Determine number of processes based on CPU cores
@@ -108,8 +108,8 @@ async def startup_event():
     # Create process pool
     with ProcessPoolExecutor(max_workers=num_processes) as executor:
         futures = [
-            executor.submit(process_batch, offset)
-            for offset in range(0, row_count, batch_size)
+            executor.submit(process_chunk, offset)
+            for offset in range(0, row_count, chunk_size)
         ]
         
         # Wait for all futures to complete
@@ -124,6 +124,6 @@ async def startup_event():
     print(f"Total time: {elapsed_time:.2f} seconds")
     print(f"Total rows processed: {total_rows_processed:,}")
     print(f"Average processing speed: {rows_per_second:.2f} rows/second")
-    print(f"Number of batches: {len(futures)}")
+    print(f"Number of chunks: {len(futures)}")
     print(f"Finished at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=====================")
