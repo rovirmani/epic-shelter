@@ -1,14 +1,18 @@
 import React from 'react';
 import { Home, Database, Settings, Users, Database as DatabaseIcon } from 'lucide-react';
 import { ThemeToggle } from '../ui/theme-toggle';
+import { Link, useLocation } from 'react-router-dom';
 
 export function TopNav() {
+  const location = useLocation();
+  const currentPath = location.pathname;
+
   const navItems = [
-    { name: 'Home', icon: Home, current: false },
-    { name: 'Migrations', icon: Database, current: true },
-    { name: 'Databases', icon: DatabaseIcon, current: false },
-    { name: 'Team', icon: Users, current: false },
-    { name: 'Settings', icon: Settings, current: false },
+    { name: 'Home', icon: Home, path: '/', current: currentPath === '/' },
+    { name: 'Migrations', icon: Database, path: '/', current: currentPath === '/' },
+    { name: 'Databases', icon: DatabaseIcon, path: '/databases', current: currentPath === '/databases' },
+    { name: 'Team', icon: Users, path: '/team', current: currentPath === '/team' },
+    { name: 'Settings', icon: Settings, path: '/settings', current: currentPath === '/settings' },
   ];
 
   return (
@@ -26,9 +30,9 @@ export function TopNav() {
           <div className="flex items-center space-x-4">
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
               {navItems.map((item) => (
-                <a
+                <Link
                   key={item.name}
-                  href="#"
+                  to={item.path}
                   className={`inline-flex items-center px-1 pt-1 text-sm font-medium ${
                     item.current
                       ? 'border-b-2 border-purple-500 text-gray-900 dark:text-white'
@@ -37,7 +41,7 @@ export function TopNav() {
                 >
                   <item.icon className="h-4 w-4 mr-2" />
                   {item.name}
-                </a>
+                </Link>
               ))}
             </div>
 
