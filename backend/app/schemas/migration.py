@@ -1,7 +1,8 @@
-from pydantic import BaseModel, UUID4
+from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
 from enum import Enum
+from uuid import UUID
 from app.schemas.database_types import DatabaseType
 
 class MigrationStatus(str, Enum):
@@ -11,8 +12,8 @@ class MigrationStatus(str, Enum):
     FAILED = "failed"
 
 class MigrationBase(BaseModel):
-    source_uuid: UUID4
-    target_uuid: UUID4
+    source_uuid: UUID
+    target_uuid: UUID
     source_type: DatabaseType
     target_type: DatabaseType
     migration_name: str
@@ -23,7 +24,7 @@ class MigrationCreate(MigrationBase):
     pass
 
 class Migration(MigrationBase):
-    migration_uuid: UUID4
+    migration_uuid: UUID
     status: MigrationStatus
     time_start: Optional[datetime] = None
     time_finish: Optional[datetime] = None

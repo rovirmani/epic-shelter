@@ -1,4 +1,5 @@
-from pydantic import BaseModel, UUID4
+from uuid import UUID, uuid4
+from pydantic import BaseModel
 from typing import Dict, Any
 from app.schemas.database_types import DatabaseType
 
@@ -11,7 +12,7 @@ class ConnectionCreate(ConnectionBase):
     pass
 
 class Connection(ConnectionBase):
-    db_uuid: UUID4
+    db_uuid: UUID
     
     class Config:
         from_attributes = True

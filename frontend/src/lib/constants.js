@@ -1,0 +1,23 @@
+export const DATABASE_TYPES = {
+  POSTGRES: 'postgres',
+  MYSQL: 'mysql',
+  SNOWFLAKE: 'snowflake',
+  SINGLESTORE: 'singlestore',
+  SUPABASE: 'supabase',
+};
+
+export const DATABASE_TYPE_LABELS = {
+  [DATABASE_TYPES.POSTGRES]: 'PostgreSQL',
+  [DATABASE_TYPES.MYSQL]: 'MySQL',
+  [DATABASE_TYPES.SNOWFLAKE]: 'Snowflake',
+  [DATABASE_TYPES.SINGLESTORE]: 'SingleStore',
+  [DATABASE_TYPES.SUPABASE]: 'Supabase',
+};
+
+export const DATABASE_TYPE_PORTS = {
+  [DATABASE_TYPES.POSTGRES]: '5432',
+  [DATABASE_TYPES.MYSQL]: '3306',
+  [DATABASE_TYPES.SNOWFLAKE]: '443',
+  [DATABASE_TYPES.SINGLESTORE]: '3306',
+  [DATABASE_TYPES.SUPABASE]: '5432',
+};

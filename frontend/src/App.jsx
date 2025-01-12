@@ -1,62 +1,81 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { DashboardLayout } from './components/dashboard/DashboardLayout';
 import { MigrationsTable } from './components/dashboard/MigrationsTable';
 import { MetricsModal } from './components/dashboard/MetricsModal';
-import { ScheduleMigrationModal } from './components/migrations/ScheduleMigrationModal';
+import { ScheduleMigrationModal } from './components/dashboard/ScheduleMigrationModal';
 import { Button } from './components/ui/button';
 import { Plus } from 'lucide-react';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { DatabasesPage } from './pages/DatabasesPage';
+import { api } from '@/lib/api';
 
-// Mock data - replace with real data from your API
-const mockMigrations = [
-  {
-    id: 1,
-    name: 'Production DB Sync',
-    source: 'Supabase Production',
-    destination: 'SingleStore Analytics',
-    status: 'running',
-    schedule: 'Daily at 00:00 UTC',
-    lastRun: '2025-01-11 16:00 UTC',
-    totalRecords: 1234567,
-    dataSize: '2.3 GB',
-    throughput: '1,200',
-    duration: '45 minutes',
-    logs: 'Migration started at 2025-01-11 16:00 UTC\nProcessing records...\nMigration completed successfully'
-  },
-  {
-    id: 2,
-    name: 'User Data Migration',
-    source: 'Legacy MySQL',
-    destination: 'Supabase Production',
-    status: 'completed',
-    schedule: null,
-    lastRun: '2025-01-10 14:30 UTC',
-  },
-  {
-    id: 3,
-    name: 'Analytics Sync',
-    source: 'Production DB',
-    destination: 'Analytics DB',
-    status: 'scheduled',
-    schedule: 'Weekly on Sunday',
-    lastRun: null,
+function App() {
+  const [migrations, setMigrations] = useState([]);
+  const [connections, setConnections] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setIsLoading(true);
+        const [migrationsData, connectionsData] = await Promise.all([
+          api.fetchMigrations(),
+          api.fetchDatabases()
+        ]);
+        
+        // Transform migrations data to match our UI needs
+        const transformedMigrations = migrationsData.map(migration => ({
+          id: migration.migration_uuid,
+          name: migration.migration_name,
+          source: connectionsData.find(db => db.db_uuid === migration.source_uuid)?.db_name || 'Unknown',
+          destination: connectionsData.find(db => db.db_uuid === migration.target_uuid)?.db_name || 'Unknown',
+          status: migration.status,
+          lastRun: migration.last_run,
+          schedule: migration.is_recurring ? 'Recurring' : null,
+          timeStart: migration.time_start,
+          timeFinish: migration.time_finish
+        }));
+
+        setMigrations(transformedMigrations);
+        setConnections(connectionsData);
+        setError(null);
+      } catch (err) {
+        console.error('Failed to fetch data:', err);
+        setError(err.message || 'Failed to load data');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  if (isLoading) {
+    return <div>Loading...</div>;
   }
-];
 
-function MigrationsPage() {
+  if (error) {
+    return <div>Error: {error}</div>;
+  }
+
+  return (
+    <ThemeProvider>
+      <Router>
+        <Routes>
+          <Route path="/" element={<DashboardLayout><MigrationsPage migrations={migrations} connections={connections} /></DashboardLayout>} />
+          <Route path="/databases" element={<DashboardLayout><DatabasesPage /></DashboardLayout>} />
+        </Routes>
+      </Router>
+    </ThemeProvider>
+  );
+}
+
+function MigrationsPage({ migrations, connections }) {
   const [isMetricsOpen, setIsMetricsOpen] = React.useState(false);
   const [isScheduleOpen, setIsScheduleOpen] = React.useState(false);
   const [selectedMigration, setSelectedMigration] = React.useState(null);
-  const [migrations, setMigrations] = React.useState(mockMigrations);
-
-  // For demo purposes - in real app, this would come from your database connections
-  const mockConnections = [
-    { id: 1, name: 'Production Postgres', type: 'postgres' },
-    { id: 2, name: 'Analytics Warehouse', type: 'snowflake' },
-    { id: 3, name: 'User Database', type: 'supabase' },
-  ];
 
   const handleScheduleMigration = (migrationData) => {
     const newMigration = {
@@ -124,22 +143,9 @@ function MigrationsPage() {
         isOpen={isScheduleOpen}
         onClose={() => setIsScheduleOpen(false)}
         onSchedule={handleScheduleMigration}
-        connections={mockConnections}
+        connections={connections}
       />
     </>
-  );
-}
-
-function App() {
-  return (
-    <ThemeProvider>
-      <Router>
-        <Routes>
-          <Route path="/" element={<DashboardLayout><MigrationsPage /></DashboardLayout>} />
-          <Route path="/databases" element={<DashboardLayout><DatabasesPage /></DashboardLayout>} />
-        </Routes>
-      </Router>
-    </ThemeProvider>
   );
 }
 

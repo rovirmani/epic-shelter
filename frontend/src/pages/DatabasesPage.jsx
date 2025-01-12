@@ -1,21 +1,77 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Search, Database, Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { AddDatabaseModal } from '@/components/databases/AddDatabaseModal';
+import { DATABASE_TYPES, DATABASE_TYPE_LABELS } from '@/lib/constants';
+import { api } from '@/lib/api';
 
 export function DatabasesPage() {
   const [connections, setConnections] = useState([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const handleAddConnection = (newConnection) => {
-    setConnections(prev => [...prev, newConnection]);
+  // Fetch connections on component mount
+  useEffect(() => {
+    fetchConnections();
+  }, []);
+
+  const fetchConnections = async () => {
+    try {
+      setIsLoading(true);
+      const data = await api.fetchDatabases();
+      setConnections(data || []);
+      setError(null);
+    } catch (err) {
+      setError('Failed to fetch database connections');
+      console.error('Error fetching connections:', err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const filteredConnections = connections.filter(conn => 
-    conn.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const handleAddConnection = async (newConnection) => {
+    try {
+      const createdConnection = await api.createDatabase(newConnection);
+      setConnections(prev => [...prev, createdConnection]);
+      setIsAddModalOpen(false);
+    } catch (err) {
+      console.error('Error creating connection:', err);
+      // You might want to show an error toast here
+    }
+  };
+
+  const filteredConnections = connections?.filter(conn => 
+    conn?.db_name?.toLowerCase().includes(searchTerm?.toLowerCase() || '')
+  ) || [];
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto py-6 max-w-7xl">
+        <div className="text-center">
+          Loading database connections...
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container mx-auto py-6 max-w-7xl">
+        <div className="text-center text-red-600">
+          {error}
+          <Button
+            className="mt-4 bg-purple-600 hover:bg-purple-700 text-white"
+            onClick={fetchConnections}
+          >
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto py-6 max-w-7xl">
@@ -64,18 +120,18 @@ export function DatabasesPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredConnections.map((conn) => (
               <div
-                key={conn.id}
+                key={conn.db_uuid}
                 className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex items-center space-x-3">
-                    <span className="text-2xl">{DATABASE_TYPES[conn.type].icon}</span>
+                    <Database className="h-6 w-6 text-gray-400" />
                     <div>
                       <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-                        {conn.name}
+                        {conn.db_name}
                       </h3>
                       <p className="text-sm text-gray-500 dark:text-gray-400">
-                        {DATABASE_TYPES[conn.type].name}
+                        {DATABASE_TYPE_LABELS[conn.db_type]}
                       </p>
                     </div>
                   </div>
@@ -90,14 +146,10 @@ export function DatabasesPage() {
                 
                 <div className="mt-4">
                   <div className="text-sm text-gray-500 dark:text-gray-400">
-                    {conn.type === 'supabase' ? (
-                      <span>Project: {conn.config.project_url}</span>
-                    ) : (
-                      <span>Host: {conn.config.host || conn.config.account}</span>
-                    )}
+                    Host: {conn.db_variables?.host || 'N/A'}
                   </div>
                   <div className="text-sm text-gray-500 dark:text-gray-400">
-                    Database: {conn.config.database}
+                    Database: {conn.db_variables?.database || 'N/A'}
                   </div>
                 </div>
               </div>
@@ -106,7 +158,7 @@ export function DatabasesPage() {
         )}
       </div>
 
-      <AddDatabaseModal
+      <AddDatabaseModal 
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         onAdd={handleAddConnection}

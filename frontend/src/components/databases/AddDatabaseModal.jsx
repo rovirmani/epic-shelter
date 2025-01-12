@@ -1,7 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { api } from '@/lib/api';
+import { DATABASE_TYPES, DATABASE_TYPE_LABELS, DATABASE_TYPE_PORTS } from '@/lib/constants';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -16,166 +19,277 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const DATABASE_TYPES = {
-  postgres: {
-    name: "PostgreSQL",
-    icon: "🐘",
-    fields: [
-      { key: "host", label: "Host", type: "text", required: true },
-      { key: "port", label: "Port", type: "text", defaultValue: "5432" },
-      { key: "database", label: "Database Name", type: "text", required: true },
-      { key: "username", label: "Username", type: "text", required: true },
-      { key: "password", label: "Password", type: "password", required: true },
-      { key: "schema", label: "Schema", type: "text", defaultValue: "public" },
-      { key: "ssl_mode", label: "SSL Mode", type: "text", defaultValue: "require" },
-    ]
-  },
-  mysql: {
-    name: "MySQL",
-    icon: "🐬",
-    fields: [
-      { key: "host", label: "Host", type: "text", required: true },
-      { key: "port", label: "Port", type: "text", defaultValue: "3306" },
-      { key: "database", label: "Database Name", type: "text", required: true },
-      { key: "username", label: "Username", type: "text", required: true },
-      { key: "password", label: "Password", type: "password", required: true },
-    ]
-  },
-  supabase: {
-    name: "Supabase",
-    icon: "⚡",
-    fields: [
-      { key: "project_url", label: "Project URL", type: "text", required: true },
-      { key: "api_key", label: "API Key", type: "password", required: true },
-      { key: "database", label: "Database Name", type: "text", required: true },
-    ]
-  },
-  singlestore: {
-    name: "SingleStore",
-    icon: "💫",
-    fields: [
-      { key: "host", label: "Host", type: "text", required: true },
-      { key: "port", label: "Port", type: "text", defaultValue: "3306" },
-      { key: "database", label: "Database Name", type: "text", required: true },
-      { key: "username", label: "Username", type: "text", required: true },
-      { key: "password", label: "Password", type: "password", required: true },
-      { key: "cluster_id", label: "Cluster ID", type: "text", required: true },
-    ]
-  },
-  snowflake: {
-    name: "Snowflake",
-    icon: "❄️",
-    fields: [
-      { key: "account", label: "Account Identifier", type: "text", required: true },
-      { key: "warehouse", label: "Warehouse", type: "text", required: true },
-      { key: "database", label: "Database", type: "text", required: true },
-      { key: "schema", label: "Schema", type: "text", required: true },
-      { key: "username", label: "Username", type: "text", required: true },
-      { key: "password", label: "Password", type: "password", required: true },
-      { key: "role", label: "Role", type: "text", required: true },
-    ]
-  }
-};
-
 export function AddDatabaseModal({ isOpen, onClose, onAdd }) {
-  const [selectedType, setSelectedType] = useState("");
-  const [formData, setFormData] = useState({});
-  const [connectionName, setConnectionName] = useState("");
+  const [formData, setFormData] = useState({
+    name: '',
+    type: '',
+    host: '',
+    port: '',
+    database: '',
+    username: '',
+    password: '',
+    // Additional fields for specific database types
+    schema: '',
+    warehouse: '',
+    role: '',
+    project_url: '',
+    api_key: '',
+  });
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  const handleTypeChange = (value) => {
-    setSelectedType(value);
-    setFormData({});
+  const handleInputChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleInputChange = (key, value) => {
-    setFormData(prev => ({ ...prev, [key]: value }));
+  const handleTypeChange = (type) => {
+    handleInputChange('type', type);
+    handleInputChange('port', DATABASE_TYPE_PORTS[type]);
   };
 
-  const handleSubmit = () => {
-    const dbConfig = {
-      id: Date.now(),
-      name: connectionName,
-      type: selectedType,
-      config: formData,
-    };
-    onAdd(dbConfig);
-    onClose();
-    setSelectedType("");
-    setFormData({});
-    setConnectionName("");
+  const getFieldsForType = (type) => {
+    const commonFields = ['name', 'type', 'database', 'username', 'password'];
+    
+    switch (type) {
+      case DATABASE_TYPES.POSTGRES:
+        return [...commonFields, 'host', 'port', 'schema'];
+      case DATABASE_TYPES.MYSQL:
+        return [...commonFields, 'host', 'port'];
+      case DATABASE_TYPES.SNOWFLAKE:
+        return [...commonFields, 'host', 'warehouse', 'schema', 'role'];
+      case DATABASE_TYPES.SINGLESTORE:
+        return [...commonFields, 'host', 'port'];
+      case DATABASE_TYPES.SUPABASE:
+        return ['name', 'type', 'project_url', 'api_key', 'database'];
+      default:
+        return commonFields;
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Only include relevant fields for the selected database type
+      const relevantFields = getFieldsForType(formData.type);
+      const filteredData = Object.fromEntries(
+        Object.entries(formData).filter(([key]) => relevantFields.includes(key))
+      );
+
+      const response = await api.createDatabase(filteredData);
+      onAdd(response);
+      onClose();
+      setFormData({
+        name: '',
+        type: '',
+        host: '',
+        port: '',
+        database: '',
+        username: '',
+        password: '',
+        schema: '',
+        warehouse: '',
+        role: '',
+        project_url: '',
+        api_key: '',
+      });
+    } catch (error) {
+      console.error('Failed to add database:', error);
+      setError('Failed to add database. Please check your connection details.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-xl font-semibold">Add Database Connection</DialogTitle>
+          <DialogTitle>Add Database Connection</DialogTitle>
+          <DialogDescription>
+            Enter your database connection details below.
+          </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-6 py-4">
-          <div className="grid gap-2">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
             <Label htmlFor="name">Connection Name</Label>
             <Input
               id="name"
-              placeholder="My Production Database"
-              value={connectionName}
-              onChange={(e) => setConnectionName(e.target.value)}
+              value={formData.name}
+              onChange={(e) => handleInputChange("name", e.target.value)}
+              placeholder="My Database"
+              required
             />
           </div>
 
-          <div className="grid gap-2">
-            <Label>Database Type</Label>
-            <Select value={selectedType} onValueChange={handleTypeChange}>
+          <div>
+            <Label htmlFor="type">Database Type</Label>
+            <Select
+              value={formData.type}
+              onValueChange={handleTypeChange}
+              required
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select database type" />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(DATABASE_TYPES).map(([key, { name, icon }]) => (
-                  <SelectItem key={key} value={key}>
-                    <span className="flex items-center">
-                      <span className="mr-2">{icon}</span>
-                      {name}
-                    </span>
+                {Object.entries(DATABASE_TYPES).map(([key, value]) => (
+                  <SelectItem key={value} value={value}>
+                    {DATABASE_TYPE_LABELS[value]}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
 
-          {selectedType && (
-            <div className="grid gap-4">
-              <h3 className="font-medium">Connection Details</h3>
-              {DATABASE_TYPES[selectedType].fields.map((field) => (
-                <div key={field.key} className="grid gap-2">
-                  <Label htmlFor={field.key}>
-                    {field.label}
-                    {field.required && <span className="text-red-500 ml-1">*</span>}
-                  </Label>
+          {formData.type && (
+            <>
+              {formData.type === DATABASE_TYPES.SUPABASE ? (
+                <>
+                  <div>
+                    <Label htmlFor="project_url">Project URL</Label>
+                    <Input
+                      id="project_url"
+                      value={formData.project_url}
+                      onChange={(e) => handleInputChange("project_url", e.target.value)}
+                      placeholder="https://xxx.supabase.co"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="api_key">API Key</Label>
+                    <Input
+                      id="api_key"
+                      type="password"
+                      value={formData.api_key}
+                      onChange={(e) => handleInputChange("api_key", e.target.value)}
+                      placeholder="your-api-key"
+                      required
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <Label htmlFor="host">Host</Label>
+                    <Input
+                      id="host"
+                      value={formData.host}
+                      onChange={(e) => handleInputChange("host", e.target.value)}
+                      placeholder="localhost"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="port">Port</Label>
+                    <Input
+                      id="port"
+                      type="number"
+                      value={formData.port}
+                      onChange={(e) => handleInputChange("port", e.target.value)}
+                      placeholder={DATABASE_TYPE_PORTS[formData.type]}
+                      required
+                    />
+                  </div>
+                </>
+              )}
+
+              <div>
+                <Label htmlFor="database">Database Name</Label>
+                <Input
+                  id="database"
+                  value={formData.database}
+                  onChange={(e) => handleInputChange("database", e.target.value)}
+                  placeholder="mydb"
+                  required
+                />
+              </div>
+
+              {formData.type !== DATABASE_TYPES.SUPABASE && (
+                <>
+                  <div>
+                    <Label htmlFor="username">Username</Label>
+                    <Input
+                      id="username"
+                      value={formData.username}
+                      onChange={(e) => handleInputChange("username", e.target.value)}
+                      placeholder="user"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="password">Password</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      value={formData.password}
+                      onChange={(e) => handleInputChange("password", e.target.value)}
+                      placeholder="••••••••"
+                      required
+                    />
+                  </div>
+                </>
+              )}
+
+              {formData.type === DATABASE_TYPES.POSTGRES && (
+                <div>
+                  <Label htmlFor="schema">Schema</Label>
                   <Input
-                    id={field.key}
-                    type={field.type}
-                    placeholder={field.label}
-                    defaultValue={field.defaultValue}
-                    onChange={(e) => handleInputChange(field.key, e.target.value)}
+                    id="schema"
+                    value={formData.schema}
+                    onChange={(e) => handleInputChange("schema", e.target.value)}
+                    placeholder="public"
                   />
                 </div>
-              ))}
+              )}
+
+              {formData.type === DATABASE_TYPES.SNOWFLAKE && (
+                <>
+                  <div>
+                    <Label htmlFor="warehouse">Warehouse</Label>
+                    <Input
+                      id="warehouse"
+                      value={formData.warehouse}
+                      onChange={(e) => handleInputChange("warehouse", e.target.value)}
+                      placeholder="COMPUTE_WH"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="role">Role</Label>
+                    <Input
+                      id="role"
+                      value={formData.role}
+                      onChange={(e) => handleInputChange("role", e.target.value)}
+                      placeholder="ACCOUNTADMIN"
+                      required
+                    />
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
+          {error && (
+            <div className="text-sm text-red-500">
+              {error}
             </div>
           )}
-        </div>
 
-        <div className="flex justify-end space-x-4">
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleSubmit}
-            disabled={!selectedType || !connectionName}
-            className="bg-purple-600 hover:bg-purple-700 text-white"
-          >
-            Add Connection
-          </Button>
-        </div>
+          <div className="flex justify-end space-x-2">
+            <Button variant="outline" type="button" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isLoading}>
+              {isLoading ? 'Adding...' : 'Add Connection'}
+            </Button>
+          </div>
+        </form>
       </DialogContent>
     </Dialog>
   );
