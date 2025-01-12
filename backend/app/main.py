@@ -55,10 +55,10 @@ async def startup_event():
     row_count = await singlestore.get_row_count(table_name)
     print(f"Row count for {table_name}: {row_count:,}")
 
-    batch_size = 100000
+    batch_size = 10000
     parquet_service = ParquetService()
     
-    for offset in range(0, row_count, batch_size):
+    for offset in range(0, 100000, batch_size):
         print(f"Processing batch starting at offset {offset:,}")
         data = await singlestore.read_table(
             table_name, 

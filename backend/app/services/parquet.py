@@ -8,6 +8,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import Dict, List, Any
 import os
+import time
 
 class CompressionType(str, Enum):
     NONE = "none"
@@ -49,18 +50,24 @@ class ParquetService:
         Returns:
             Path to the saved Parquet file
         """
+        start_time = time.time()
+
         if config is None:
             config = ParquetConfig()
 
         # Convert DataFrame to PyArrow table in thread pool
         loop = asyncio.get_event_loop()
+        conversion_start = time.time()
         table = await loop.run_in_executor(
             self.thread_pool,
             pa.Table.from_pandas,
             df
         )
+        conversion_time = time.time() - conversion_start
+        print(f"DataFrame to PyArrow conversion took: {conversion_time:.2f} seconds")
 
         # Write to Parquet file
+        write_start = time.time()
         await loop.run_in_executor(
             self.thread_pool,
             self._write_parquet,
@@ -68,6 +75,8 @@ class ParquetService:
             output_path,
             config
         )
+        write_time = time.time() - write_start
+        print(f"Writing Parquet file took: {write_time:.2f} seconds")
 
         return output_path
 

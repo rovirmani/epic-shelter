@@ -2,6 +2,7 @@ from typing import Any, Dict, List
 import aiomysql
 from app.core.config import settings
 import pandas as pd
+import time
 
 class SingleStoreConnector:
     def __init__(self, config: Dict[str, Any]):
@@ -108,6 +109,8 @@ class SingleStoreConnector:
             pandas DataFrame containing the query results
         """
         try:
+            start_time = time.time()
+            
             # Get primary key columns for sorting
             pk_columns = await self.get_primary_key_columns(table_name)
             if not pk_columns:
@@ -130,11 +133,21 @@ class SingleStoreConnector:
                         LIMIT {interval}
                         OFFSET {offset}
                     """
+                    query_start = time.time()
                     await cur.execute(query)
                     rows = await cur.fetchall()
+                    query_time = time.time() - query_start
+                    print(f"Query execution time: {query_time:.2f} seconds")
                     
                     # Create DataFrame directly from rows
-                    return pd.DataFrame(rows, columns=columns)
+                    df_start = time.time()
+                    df = pd.DataFrame(rows, columns=columns)
+                    df_time = time.time() - df_start
+                    print(f"DataFrame conversion time: {df_time:.2f} seconds")
+                    
+                    total_time = time.time() - start_time
+                    print(f"Total execution time: {total_time:.2f} seconds")
+                    return df
         except Exception as e:
             print(f"Error reading table {table_name}: {str(e)}")
             return pd.DataFrame()  # Return empty DataFrame on error
