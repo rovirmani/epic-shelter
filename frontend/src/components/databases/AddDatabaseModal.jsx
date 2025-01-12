@@ -74,11 +74,18 @@ export function AddDatabaseModal({ isOpen, onClose, onAdd }) {
     try {
       // Only include relevant fields for the selected database type
       const relevantFields = getFieldsForType(formData.type);
-      const filteredData = Object.fromEntries(
-        Object.entries(formData).filter(([key]) => relevantFields.includes(key))
+      const filteredVariables = Object.fromEntries(
+        Object.entries(formData)
+          .filter(([key]) => relevantFields.includes(key) && key !== 'name' && key !== 'type')
       );
 
-      const response = await api.createDatabase(filteredData);
+      const transformedData = {
+        db_type: formData.type,
+        db_name: formData.name,
+        db_variables: filteredVariables
+      };
+
+      const response = await api.createDatabase(transformedData);
       onAdd(response);
       onClose();
       setFormData({

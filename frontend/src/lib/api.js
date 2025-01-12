@@ -45,6 +45,18 @@ export const api = {
             body: JSON.stringify(data),
         }).then(handleResponse),
     
+    updateDatabase: async (data) => {
+        return await handleResponse(
+          await fetch(`${API_BASE_URL}/databases/${data.db_uuid}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data),
+          })
+        );
+      },
+    
     // Migrations
     fetchMigrations: () => 
         fetch(`${API_BASE_URL}/migrations`)

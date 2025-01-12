@@ -7,6 +7,7 @@ from app.db import execute_query, execute_single, execute_write, test_connection
 from app.schemas.connection import ConnectionCreate, Connection
 from app.schemas.migration import MigrationCreate, Migration, MigrationStatus
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +104,30 @@ async def get_database(db_uuid: UUID):
         raise
     except Exception as e:
         logger.error(f"Database query failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/databases/{db_uuid}", response_model=Connection)
+async def update_database(db_uuid: UUID, connection: ConnectionCreate):
+    """Update a database connection"""
+    try:
+        # Convert db_variables to JSON string
+        db_variables_json = json.dumps(connection.db_variables)
+        
+        execute_write("""
+            UPDATE connections 
+            SET db_name = %s, 
+                db_type = %s, 
+                db_variables = %s
+            WHERE db_uuid = UNHEX(REPLACE(%s, '-', ''))
+        """, (connection.db_name, connection.db_type, db_variables_json, str(db_uuid)))
+        
+        return {
+            "db_uuid": db_uuid,
+            "db_name": connection.db_name,
+            "db_type": connection.db_type,
+            "db_variables": connection.db_variables
+        }
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 # Migration Routes

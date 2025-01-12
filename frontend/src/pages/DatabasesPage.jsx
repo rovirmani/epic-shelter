@@ -3,12 +3,15 @@ import { Plus, Search, Database, Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { AddDatabaseModal } from '@/components/databases/AddDatabaseModal';
+import { EditDatabaseModal } from '@/components/databases/EditDatabaseModal';
 import { DATABASE_TYPES, DATABASE_TYPE_LABELS } from '@/lib/constants';
 import { api } from '@/lib/api';
 
 export function DatabasesPage() {
   const [connections, setConnections] = useState([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedDatabase, setSelectedDatabase] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -41,6 +44,19 @@ export function DatabasesPage() {
       console.error('Error creating connection:', err);
       // You might want to show an error toast here
     }
+  };
+
+  const handleEditClick = (database) => {
+    setSelectedDatabase(database);
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditSave = (updatedDatabase) => {
+    setConnections(prev => 
+      prev.map(db => 
+        db.db_uuid === updatedDatabase.db_uuid ? updatedDatabase : db
+      )
+    );
   };
 
   const filteredConnections = connections?.filter(conn => 
@@ -139,6 +155,7 @@ export function DatabasesPage() {
                     variant="ghost"
                     size="sm"
                     className="bg-purple-50/40 text-purple-600 hover:bg-purple-50/80 hover:text-purple-700 dark:bg-purple-900/20 dark:text-purple-300 dark:hover:bg-purple-900/30"
+                    onClick={() => handleEditClick(conn)}
                   >
                     <Settings2 className="h-4 w-4" />
                   </Button>
@@ -162,6 +179,12 @@ export function DatabasesPage() {
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         onAdd={handleAddConnection}
+      />
+      <EditDatabaseModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        onSave={handleEditSave}
+        database={selectedDatabase}
       />
     </div>
   );
