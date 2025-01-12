@@ -23,7 +23,7 @@ class ParquetConfig:
         self,
         compression: CompressionType = CompressionType.SNAPPY,
         row_group_size: int = 100000,
-        enable_statistics: bool = True
+        enable_statistics: bool = True,
     ):
         self.compression = compression
         self.row_group_size = row_group_size
@@ -33,52 +33,57 @@ class ParquetService:
     def __init__(self):
         self.thread_pool = ThreadPoolExecutor()
 
-    async def dataframe_to_parquet(
+    def dataframe_to_parquet(
         self,
         df: pd.DataFrame,
         output_path: str,
-        config: Optional[ParquetConfig] = None
-    ) -> str:
+        chunk_size: Optional[int] = None
+    ) -> List[str]:
         """
-        Convert pandas DataFrame to Parquet format asynchronously
+        Convert pandas DataFrame to multiple Parquet files if chunk_size is specified
         
         Args:
             df: Input pandas DataFrame
-            output_path: Where to save the Parquet file
-            config: ParquetConfig object for customizing the conversion
+            output_path: Base path for saving the Parquet file(s)
+            chunk_size: Optional chunk size for splitting the DataFrame
             
         Returns:
-            Path to the saved Parquet file
+            List of paths to the saved Parquet files
         """
         start_time = time.time()
+        config = ParquetConfig()
 
-        if config is None:
-            config = ParquetConfig()
+        output_files = []
 
-        # Convert DataFrame to PyArrow table in thread pool
-        loop = asyncio.get_event_loop()
-        conversion_start = time.time()
-        table = await loop.run_in_executor(
-            self.thread_pool,
-            pa.Table.from_pandas,
-            df
-        )
-        conversion_time = time.time() - conversion_start
-        print(f"DataFrame to PyArrow conversion took: {conversion_time:.2f} seconds")
+        # If chunk_size is specified, split into multiple files
+        if chunk_size:
+            num_chunks = (len(df) + chunk_size - 1) // chunk_size
+            
+            for i in range(num_chunks):
+                chunk_start = i * chunk_size
+                chunk_end = min((i + 1) * chunk_size, len(df))
+                df_chunk = df.iloc[chunk_start:chunk_end]
+                
+                # Generate chunk filename
+                file_name, file_ext = os.path.splitext(output_path)
+                chunk_path = f"{file_name}_{i}{file_ext}"
+                
+                # Convert chunk to PyArrow and write
+                table = pa.Table.from_pandas(df_chunk)
+                self._write_parquet(table, chunk_path, config)
+                output_files.append(chunk_path)
+                
+                print(f"Wrote chunk {i+1}/{num_chunks} to {chunk_path}")
+        else:
+            # Original behavior for single file
+            table = pa.Table.from_pandas(df)
+            self._write_parquet(table, output_path, config)
+            output_files.append(output_path)
 
-        # Write to Parquet file
-        write_start = time.time()
-        await loop.run_in_executor(
-            self.thread_pool,
-            self._write_parquet,
-            table,
-            output_path,
-            config
-        )
-        write_time = time.time() - write_start
-        print(f"Writing Parquet file took: {write_time:.2f} seconds")
-
-        return output_path
+        total_time = time.time() - start_time
+        print(f"Total processing time: {total_time:.2f} seconds")
+        
+        return output_files
 
     def _write_parquet(
         self,

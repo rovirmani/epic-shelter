@@ -95,7 +95,7 @@ class SingleStoreConnector:
             print(f"Error getting primary key columns for table {table_name}: {str(e)}")
             return []
 
-    async def read_table(self, table_name: str, interval: int, offset: int = 0, sort_column: str = 'id') -> pd.DataFrame:
+    def read_table(self, table_name: str, interval: int, offset: int = 0, sort_column: str = 'id') -> pd.DataFrame:
         """
         Read a portion of a table and return as a pandas DataFrame
         
@@ -112,30 +112,29 @@ class SingleStoreConnector:
             start_time = time.time()
             
             # Get primary key columns for sorting
-            pk_columns = await self.get_primary_key_columns(table_name)
+            pk_columns = self.get_primary_key_columns(table_name)
             if not pk_columns:
                 pk_columns = [sort_column]  # Fallback to sort_column if no primary key found
                 
             # Build ORDER BY clause
             order_by = ", ".join(pk_columns)
             
-            async with self.pool.acquire() as conn:
-                async with conn.cursor() as cur:
+            with self.pool.acquire() as conn:
+                with conn.cursor() as cur:
                     # Get column names
-                    await cur.execute(f"SELECT * FROM {table_name} LIMIT 0")
+                    cur.execute(f"SELECT * FROM {table_name} LIMIT 0")
                     columns = [desc[0] for desc in cur.description]
                     
                     # Read data with consistent ordering
                     query = f"""
                         SELECT *
                         FROM {table_name}
-                        ORDER BY {order_by}
                         LIMIT {interval}
                         OFFSET {offset}
                     """
                     query_start = time.time()
-                    await cur.execute(query)
-                    rows = await cur.fetchall()
+                    cur.execute(query)
+                    rows = cur.fetchall()
                     query_time = time.time() - query_start
                     print(f"Query execution time: {query_time:.2f} seconds")
                     
