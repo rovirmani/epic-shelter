@@ -4,12 +4,12 @@ import pandas as pd
 import time
 
 class SingleStoreConnector:
-    def __init__(self, config: Dict[str, Any]):
-        self.host = config.get('host')
-        self.port = int(config.get('port'))
-        self.user = config.get('username')
-        self.password = config.get('password')
-        self.database = config.get('database')
+    def __init__(self, host: str, port: int, user: str, password: str, database: str):
+        self.host = host
+        self.port = port
+        self.user = user
+        self.password = password
+        self.database = database
         self.pool = None
 
     async def connect(self) -> None:
@@ -183,7 +183,7 @@ class SingleStoreConnector:
             print(f"Error writing to table {table_name}: {str(e)}")
             raise
 
-    async def ingest_parquet(self, table_name: str, parquet_path: str) -> None:
+    async def ingest_parquet(self, table_name: str, parquet_path: str, aws_access_key_id: str, aws_secret_access_key: str) -> None:
         """
         Ingest a parquet file into a table in SingleStore using a pipeline
         
@@ -219,7 +219,7 @@ class SingleStoreConnector:
             CREATE OR REPLACE PIPELINE {pipeline_name}
             AS LOAD DATA S3 '{parquet_path}'
             CONFIG '{{"region": "us-west-2"}}'
-            CREDENTIALS '{{"aws_access_key_id": "AKIATCKAPSJCJ55YUGMT", "aws_secret_access_key": "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"}}'
+            CREDENTIALS '{{"aws_access_key_id": "{aws_access_key_id}", "aws_secret_access_key": "{aws_secret_access_key}"}}'
             INTO TABLE {table_name}
             FORMAT PARQUET
             (

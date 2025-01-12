@@ -12,6 +12,8 @@ class S3Service:
                 aws_access_key_id=credentials.get('aws_access_key_id'),
                 aws_secret_access_key=credentials.get('aws_secret_access_key')
             )
+            self.access_key_id = credentials.get('aws_access_key_id')
+            self.secret_access_key = credentials.get('aws_secret_access_key')
         else:
             # Use environment variables or AWS CLI configuration
             self.s3_client = boto3.client('s3')
