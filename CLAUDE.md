@@ -50,26 +50,32 @@ epic-shelter/
 ### Frontend
 ```bash
 cd frontend
-npm install                  # Install dependencies
+npm install
 npm run dev                  # Vite dev server (http://localhost:5173)
-npm run build                # Production build
-npm run lint                 # ESLint check
-npm run preview              # Preview production build
+npm run build
+npm run lint
+npm run preview
 ```
 
-### Backend
+### Backend (uv)
 ```bash
-cd backend
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload    # FastAPI dev server (http://localhost:8000)
+uv sync                          # Install/sync Python dependencies
+uv run uvicorn app.main:app --reload    # FastAPI (http://localhost:8000)
+uv add <package>                  # Add new dependency
 ```
 
 ### Both Together
 ```bash
 npm run dev:all              # Runs frontend + backend concurrently
 ```
+
+### Code Quality (ruff)
+```bash
+uv run ruff format .
+uv run ruff check .
+uv run ruff check --fix .
+```
+
 
 ## Environment & Config
 
